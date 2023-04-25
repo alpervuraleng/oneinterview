@@ -5,11 +5,15 @@ suite('MemoryCache', function() {
     // Helpers:
 
     async function assertNotInCache(cache, key) {
+        await assertNotInCache(cache, key, '');
+    }
+
+    async function assertNotInCache(cache, key, context) {
         const { cached, value } = await cache.get(key);
         assert.equal(
             cached,
             false,
-            `Expected '${key}' to not be in cache, but was`,
+            `${context} Expected '${key}' to not be in cache, but was`,
         );
         assert.equal(value, null);
     }
