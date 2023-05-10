@@ -132,7 +132,30 @@ suite('MemoryCache', function() {
         await assertCachedEquals(cache, 'e', e);
     });
 
+    // TODO: Dependency inject timing mechanism into constructor
+    // TODO: Allow passing in scheduler timing or manually invoking for testing 
+
+    // Case 1: Put an item in the cache with a negative expiration
+    // Try to get the item immediately after and verify the right response
+    // (Simulate a situation where the item was expired)
     test('Expiry', async function() {
-        this.skip(); // TODO: Implement!
+        //this.skip(); // TODO: Implement!
+
+        const cache = new MemoryCache({ maxItems: 3 });
+        const key = 'a';
+        await cache.set('a', 'A', {expireAfterMS: -1});
+        const res = await cache.get(key);
+        
+        assert.equal(
+            res.cached,
+            true
+        );
+        assert.equal(
+            res.value,
+            null
+        );
     });
+
+    // Case 2: Put an item in the cache with a positive expiration
+    // Try to retrieve the item and verify we can 
 });

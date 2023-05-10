@@ -30,12 +30,17 @@ module.exports = class MemoryCache {
     _scheduler = new DefaultScheduler();
 
     _expirationRecords = {};
+    // Default 1h. We can also pass in via opts if we want. 
+    _expiryCleanDelay = 3600 * 1000;
+
     // Public API:
 
     constructor(opts = {}) {
         if (typeof opts.maxItems === 'number') {
             this._maxItems = opts.maxItems;
         }
+ 
+        this.DefaultScheduler.runOnceAfter(() => { this.cleanExpirations(); }, this._expiryCleanDelay);
     }
 
     /**
@@ -57,10 +62,8 @@ module.exports = class MemoryCache {
 
         // We have the node. But is it expired?
         if (this._expirationRecords[key]) {
-            const curTime = (new Date()).getTime();
-            const isExpired = this._expirationRecords[key].getTime() < curTime;
-            if (isExpired) {
-                
+            if (this.keyIsExpired(key)) {
+                this.clear(key);
                 return { cached: true, value: null };
             }
         }
@@ -113,9 +116,9 @@ module.exports = class MemoryCache {
      * @param {string} key
      */
     async clear(key) {
-        console.log(`Clear: ${key}`);
-
-        // TODO: Also clear the expiration cache 
+        if (this._expirationRecords[key]) {
+            delete this._expirationRecords[key];
+        }
 
         // Do we have this key in our cache? Noop if not.
         if (!this._nodesByKey.has(key)) {
@@ -128,5 +131,22 @@ module.exports = class MemoryCache {
         this._nodesByKey.delete(key);
 
         return true;
+    }
+
+    // TODO: Thread safety concerns? 
+    // Other functions are marked async, but they are implemented synchronously
+    cleanExpirations() {
+        for (key in this._expirationRecords) {
+            if (this.keyIsExpired(key)) {
+                this.clear(key);
+            }
+        }
+
+        this.DefaultScheduler.runOnceAfter(() => { this.cleanExpirations(); }, this._expiryCleanDelay);
+    }
+
+    keyIsExpired(key) {
+        const curTime = (new Date()).getTime();
+        return this._expirationRecords[key].getTime() < curTime;   
     }
 };
