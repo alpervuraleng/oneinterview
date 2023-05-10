@@ -29,6 +29,7 @@ module.exports = class MemoryCache {
     _nodesByKey = new Map(); // values are Yallist Nodes
     _scheduler = new DefaultScheduler();
 
+    _expirationRecords = {};
     // Public API:
 
     constructor(opts = {}) {
@@ -48,22 +49,34 @@ module.exports = class MemoryCache {
     async get(key) {
         // Do we have this key in our cache?
         if (!this._nodesByKey.has(key)) {
-            //console.log(`GET Key ${key}, does not have`);
             return { cached: false, value: null };
         }
 
         const node = this._nodesByKey.get(key);
         const item = node.value;
 
-        // TODO: Check for expiry, and clear if expired.
+        // We have the node. But is it expired?
+        if (this._expirationRecords[key]) {
+            const curTime = (new Date()).getTime();
+            const isExpired = this._expirationRecords[key].getTime() < curTime;
+            if (isExpired) {
+                
+                return { cached: true, value: null };
+            }
+        }
 
         // Mark as most recently read.
         this._mostRecentlyRead.moveToFront(node);
-        //console.log(`Got this item ${key}. New tail is ${value}`);
 
-        //console.log(`GET Key ${key}, Value ${item.value}`);
         return { cached: true, value: item.value };
     }
+
+    // Thinking out loud about different ways to design 
+    // Option 1: Store the expiration time alongside the item in the cache 
+    // Option 2: Maintain a separate dictionary mapping item to expiration time
+
+    // One downside of option 2 is that we will need to make sure this dictionary
+    // does not indefinitely expand
 
     /**
      * Caches the given value (which may be null) under the given key,
@@ -75,11 +88,16 @@ module.exports = class MemoryCache {
      */
     async set(key, value, opts = {}) {
         // Add item.
-        // TODO: Store expiry too, and clear when expired.
         const item = { key, value };
         this._mostRecentlyRead.addToFront(item);
         console.log(`Key ${key}, Value ${value}, Head ${this._mostRecentlyRead.head}`);
         this._nodesByKey.set(key, this._mostRecentlyRead.head);
+
+        if (opts && opts.expireAfterMS) {
+            let expirDate = new Date();
+            expirDate = new Date(currentTime.getTime() + opts.expireAfterMS);
+            this._expirationRecords[key] = expirDate;
+        }
 
         // If we're over capacity, evict least recently read items.
         while (this._maxItems > 0 && this._nodesByKey.size > this._maxItems) {
@@ -96,6 +114,8 @@ module.exports = class MemoryCache {
      */
     async clear(key) {
         console.log(`Clear: ${key}`);
+
+        // TODO: Also clear the expiration cache 
 
         // Do we have this key in our cache? Noop if not.
         if (!this._nodesByKey.has(key)) {
